@@ -122,13 +122,17 @@ def main(file_name, output_dir, target_column = "weight_sm", is_pkl=False):
     checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval=checkpoint_counter)
     print(f"Done cell resampling for column {target_column}")
 
+def iterate_over_columns(file_name, output_dir, target_columns = target_columns):
+    for target_column in target_columns:
+        if os.path.exists(checkpoint_filename):
+            main(checkpoint_filename, output_dir, target_column = target_column, is_pkl=True)
+        else:
+            main(file_name, output_dir)
+
 
 if __name__ == "__main__":
     file_name = files[0]
     checkpoint_name = file_name.split("/")[-1].split(".")[-2]
     checkpoint_filename = f"{output_dir}{checkpoint_name}.pkl"
-    if os.path.exists(checkpoint_filename):
-        main(checkpoint_filename, output_dir, target_column = target_columns[0], is_pkl=True)
-    else:
-        main(file_name, output_dir)
+    iterate_over_columns(file_name, output_dir, target_columns = target_columns)
     print(f"Done cell resampling for file {checkpoint_name}")
