@@ -123,7 +123,7 @@ def main(file_name, output_dir, target_column = "weight_sm", is_pkl=False):
     print(f"Done cell resampling for column {target_column}")
 
 def iterate_over_columns(file_name, output_dir, target_columns = target_columns):
-    for target_column in target_columns:
+    for target_column in tqdm(target_columns):
         if os.path.exists(checkpoint_filename):
             main(checkpoint_filename, output_dir, target_column = target_column, is_pkl=True)
         else:
