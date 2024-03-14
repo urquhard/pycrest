@@ -78,7 +78,7 @@ def resample(data, nearest_indices, target_column):
     return data
 
 def checkpoint(data, filename, output_dir, checkpoint_counter, checkpoint_interval):
-    filename = filename.split("/")[-1].split(".")[-1]
+    filename = filename.split("/")[-1].split(".")[-2]
     # Check if it's time for a checkpoint
     if checkpoint_counter % checkpoint_interval == 0:
         # Save checkpoint to pickle file
@@ -127,7 +127,7 @@ def iterate_over_columns(file_name, output_dir, target_columns = target_columns)
         if os.path.exists(checkpoint_filename):
             main(checkpoint_filename, output_dir, target_column = target_column, is_pkl=True)
         else:
-            main(file_name, output_dir)
+            main(file_name, output_dir, target_column = target_column)
 
 
 if __name__ == "__main__":
