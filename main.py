@@ -119,7 +119,10 @@ def main(file_name, output_dir, target_column = "weight_sm", is_pkl=False):
         checkpoint_counter += 1
         checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval)
     
-    checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval=checkpoint_counter)
+    if checkpoint_counter == 0:
+        checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval=checkpoint_interval)
+    else:
+        checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval=checkpoint_counter)
     print(f"Done cell resampling for column {target_column}")
 
 def iterate_over_columns(file_name, output_dir, target_columns = target_columns):
