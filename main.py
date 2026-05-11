@@ -5,6 +5,7 @@ from tqdm import tqdm
 
 import os
 import json
+import glob
 
 files = [
     "input/mva_ntuple_vbfy_preselection_030426CAFVBFHY_sig_X_c20a_vbfhyww_Herwig7.root", 
@@ -50,7 +51,7 @@ def inorder_selection(data, target_column: str = "weight"):
     return ind, data
 
 def nearest_neighbors(data, ind, target_column, excluded_columns = ["j3", "btag", "m_dilepton_transverse"]):
-    col_tmp = list(filter(lambda x: target_column != x and any(excluded not in x for excluded in excluded_columns),
+    col_tmp = list(filter(lambda x: target_column != x and all(excluded not in x for excluded in excluded_columns),
                            columns))
 
     quadrutures = [(data[column] - data[column][ind])**2 for column in col_tmp]
@@ -61,7 +62,11 @@ def nearest_neighbors(data, ind, target_column, excluded_columns = ["j3", "btag"
     # Find nearest neighbors excluding the index itself
     nearest_indices = np.argsort(distances)
     cumweight = np.cumsum(data[target_column][nearest_indices])
-    nearest = np.argmax(cumweight>0)
+    positive_mask = cumweight > 0
+    if np.any(positive_mask):
+        nearest = np.argmax(positive_mask)
+    else:
+        nearest = len(nearest_indices) - 1
     # nearest = np.searchsorted(aa, N/2)+1 # Slightly faster
     cell = nearest_indices[0:nearest + 1]
     return cell
@@ -145,23 +150,29 @@ def main(file_name, output_dir, target_column = "weight", is_pkl=False, tree_nam
     # Main Loop for cell resampling
     print(f"Started cell resampling for {file_name}")
     checkpoint_counter = 0
-    # Find the indices of negative values
-    negative_indices = np.where(data[target_column] < 0)[0]
-    used = np.zeros_like(negative_indices)
-    for ind in tqdm(negative_indices):
-        if (ind in negative_indices * used and ind != 0):
-            continue
-        # ind, data = most_negative_selection(data)
-        cell = nearest_neighbors(data, ind, target_column)
-        data = resample(data, cell, target_column)
-        
-        # Remove the resampled indices from negative_indices
-        indices_in_negative = np.where(np.isin(negative_indices, cell))[0]
-        used[indices_in_negative] = 1
+    while True:
+        # Recompute negatives from the current weights after every pass.
+        negative_indices = np.where(data[target_column] < 0)[0]
+        if len(negative_indices) == 0:
+            break
 
-        # Increment checkpoint counter
-        checkpoint_counter += 1
-        checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval)
+        progress_made = False
+        for ind in tqdm(negative_indices):
+            if data[target_column][ind] >= 0:
+                continue
+
+            # ind, data = most_negative_selection(data)
+            cell = nearest_neighbors(data, ind, target_column)
+            data = resample(data, cell, target_column)
+
+            # Increment checkpoint counter
+            checkpoint_counter += 1
+            progress_made = True
+            checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval)
+
+        if not progress_made:
+            print("WARNING: No progress made in this pass; stopping to avoid an infinite loop.")
+            break
     
     if checkpoint_counter == 0:
         checkpoint(data, file_name, output_dir, checkpoint_counter, checkpoint_interval=checkpoint_interval)
@@ -170,22 +181,16 @@ def main(file_name, output_dir, target_column = "weight", is_pkl=False, tree_nam
     print(f"Done cell resampling for column {target_column}")
 
 def iterate_over_columns(file_name, output_dir, target_columns = ["weight"]):
+    base_name = file_name.split('/')[-1]
+    checkpoint_pattern = f"{output_dir}checkpoint_*_{base_name}"
+    stale_checkpoints = glob.glob(checkpoint_pattern)
+    if stale_checkpoints:
+        print(f"Removing {len(stale_checkpoints)} stale checkpoints for {base_name}")
+        for cp in stale_checkpoints:
+            os.remove(cp)
+
     for target_column in tqdm(target_columns):
-        # Look for most recent ROOT checkpoint
-        base_name = file_name.split('/')[-1]
-        checkpoint_pattern = f"{output_dir}checkpoint_*_{base_name}"
-        
-        # Try to find existing checkpoints
-        import glob
-        existing_checkpoints = glob.glob(checkpoint_pattern)
-        if existing_checkpoints:
-            # Sort by checkpoint number (descending) and use the most recent
-            existing_checkpoints.sort(key=lambda x: int(x.split('_')[1]), reverse=True)
-            latest_checkpoint = existing_checkpoints[0]
-            print(f"Found checkpoint: {latest_checkpoint}")
-            main(latest_checkpoint, output_dir, target_column=target_column, is_pkl=False)
-        else:
-            main(file_name, output_dir, target_column=target_column)
+        main(file_name, output_dir, target_column=target_column)
 
 
 if __name__ == "__main__":
